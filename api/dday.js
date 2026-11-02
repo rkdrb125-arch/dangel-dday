@@ -7,14 +7,13 @@ const HEIGHT = 110;
 
 let assetsPromise;
 
+// 일반 한글 폰트와 세잎클로버 불러오기
 async function getAssets() {
   if (!assetsPromise) {
     assetsPromise = (async () => {
-      // 일반 한글 글꼴: Noto Sans KR
       const fontUrl =
         "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf";
 
-      // 세잎클로버 이모지 이미지
       const cloverUrl =
         "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2618.png";
 
@@ -25,11 +24,11 @@ async function getAssets() {
         ]);
 
       if (!fontResponse.ok) {
-        throw new Error("한글 폰트를 불러오지 못했습니다.");
+        throw new Error("한글 폰트 다운로드 실패");
       }
 
       if (!cloverResponse.ok) {
-        throw new Error("클로버를 불러오지 못했습니다.");
+        throw new Error("세잎클로버 다운로드 실패");
       }
 
       const fontBuffer = Buffer.from(
@@ -40,7 +39,8 @@ async function getAssets() {
         await cloverResponse.arrayBuffer()
       );
 
-      const registered = GlobalFonts.registerFromBuffer(
+      // 이전 오류 수정: registerFromBuffer 대신 register
+      const registered = GlobalFonts.register(
         fontBuffer,
         "CafeFont"
       );
@@ -61,6 +61,7 @@ async function getAssets() {
   return assetsPromise;
 }
 
+// 한국 날짜 기준 D+ 계산
 function getDays() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
@@ -78,6 +79,7 @@ function getDays() {
   }
 
   const start = Date.UTC(2020, 7, 25);
+
   const today = Date.UTC(
     date.year,
     date.month - 1,
@@ -89,6 +91,7 @@ function getDays() {
   ) + 1;
 }
 
+// 둥근 사각형
 function rounded(ctx, x, y, w, h, r, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
@@ -96,6 +99,7 @@ function rounded(ctx, x, y, w, h, r, color) {
   ctx.fill();
 }
 
+// GIF 생성
 export default async function handler(req, res) {
   try {
     const { cloverImage } = await getAssets();
@@ -105,7 +109,9 @@ export default async function handler(req, res) {
     const ctx = canvas.getContext("2d");
 
     const encoder = new GIFEncoder(
-      WIDTH, HEIGHT, "octree"
+      WIDTH,
+      HEIGHT,
+      "octree"
     );
 
     encoder.setRepeat(0);
@@ -127,17 +133,24 @@ export default async function handler(req, res) {
       ctx.measureText(rightText).width;
 
     const contentWidth =
-      25 + 12 + leftWidth + 24 +
+      25 + 12 +
+      leftWidth + 24 +
       rightWidth + 12 + 25;
 
-    for (let i = 0; i < 36; i++) {
+    const frameCount = 36;
+
+    for (let i = 0; i < frameCount; i++) {
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
+      // 연두색 배경
       rounded(
-        ctx, 0, 0, WIDTH, HEIGHT,
-        13, "#D6E78A"
+        ctx,
+        0, 0, WIDTH, HEIGHT,
+        13,
+        "#D6E78A"
       );
 
+      // 상단 제목
       ctx.fillStyle = "#604329";
       ctx.font = 'bold 13px Arial';
       ctx.fillText(
@@ -145,11 +158,15 @@ export default async function handler(req, res) {
         24, 29
       );
 
+      // 흰색 전광판
       rounded(
-        ctx, 14, 43, 806, 54,
-        9, "#FFFFFF"
+        ctx,
+        14, 43, 806, 54,
+        9,
+        "#FFFFFF"
       );
 
+      // 움직이는 영역 제한
       ctx.save();
       ctx.beginPath();
       ctx.rect(14, 43, 806, 54);
@@ -159,33 +176,46 @@ export default async function handler(req, res) {
         WIDTH + contentWidth + 40;
 
       let x =
-        WIDTH - (i / 36) * distance;
+        WIDTH - (i / frameCount) * distance;
 
+      // 왼쪽 세잎클로버
       ctx.drawImage(
-        cloverImage, x, 57, 25, 25
+        cloverImage,
+        x, 57, 25, 25
       );
+
       x += 37;
 
+      // 다니엘
       ctx.font = font;
       ctx.fillStyle = "#604329";
       ctx.fillText(leftText, x, 77);
+
       x += leftWidth;
 
+      // 코랄핑크 하트
       ctx.font = "bold 23px Arial";
       ctx.fillStyle = "#F28F8F";
       ctx.fillText("♥", x, 78);
+
       x += 24;
 
+      // 미겔 + 디데이
       ctx.font = font;
       ctx.fillStyle = "#604329";
       ctx.fillText(rightText, x, 77);
+
       x += rightWidth + 12;
 
+      // 오른쪽 세잎클로버
       ctx.drawImage(
-        cloverImage, x, 57, 25, 25
+        cloverImage,
+        x, 57, 25, 25
       );
 
       ctx.restore();
+
+      // 프레임 추가
       encoder.addFrame(ctx);
     }
 
@@ -204,8 +234,10 @@ export default async function handler(req, res) {
     res.status(200).send(
       Buffer.from(encoder.out.getData())
     );
+
   } catch (error) {
     console.error(error);
+
     res.status(500).send(
       "GIF generation failed: " + error.message
     );
