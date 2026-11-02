@@ -1,6 +1,6 @@
 
 export default function handler(req, res) {
-  // 한국 시간 기준 오늘 날짜
+  // 한국 시간 기준 날짜
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -15,7 +15,7 @@ export default function handler(req, res) {
     }
   }
 
-  // 2020년 8월 25일 = D+1
+  // 2020년 8월 25일부터 D+ 계산
   const start = Date.UTC(2020, 7, 25);
   const today = Date.UTC(
     date.year,
@@ -23,11 +23,10 @@ export default function handler(req, res) {
     date.day
   );
 
-  const days = Math.floor(
-    (today - start) / 86400000
-  ) + 1;
+  const days =
+    Math.floor((today - start) / 86400000) + 1;
 
-  // 초록색 세잎클로버
+  // 세잎클로버 도형
   function clover(x, y) {
     return `
       <g transform="translate(${x} ${y})"
@@ -43,21 +42,6 @@ export default function handler(req, res) {
               stroke-width="2"
               stroke-linecap="round"/>
       </g>
-    `;
-  }
-
-  // 코랄핑크 하트
-  function heart(x, y) {
-    return `
-      <path
-        d="M ${x} ${y + 7}
-           C ${x - 22} ${y - 6},
-             ${x - 10} ${y - 16},
-             ${x} ${y - 7}
-           C ${x + 10} ${y - 16},
-             ${x + 22} ${y - 6},
-             ${x} ${y + 7} Z"
-        fill="#F28F8F"/>
     `;
   }
 
@@ -84,22 +68,42 @@ export default function handler(req, res) {
             width="806" height="54"
             rx="9" fill="#FFFFFF"/>
 
-      <!-- 양쪽 세잎클로버 -->
-      ${clover(95, 69)}
-      ${clover(739, 69)}
+      <!-- 전광판 밖으로 나가는 부분 숨기기 -->
+      <defs>
+        <clipPath id="tickerClip">
+          <rect x="14" y="43"
+                width="806" height="54"
+                rx="9"/>
+        </clipPath>
+      </defs>
 
-      <!-- 가운데 문구 -->
-      <text x="417" y="77"
-            text-anchor="middle"
-            font-family="Arial, sans-serif"
-            font-size="20"
-            font-weight="bold"
-            fill="#604329">
-        <tspan>다니엘</tspan>
-        <tspan fill="#F28F8F"> ♥ </tspan>
-        <tspan>미겔 · 함께한 지 D+${days}</tspan>
-      </text>
+      <!-- 움직이는 문구 -->
+      <g clip-path="url(#tickerClip)">
+        <g>
+          <!-- 오른쪽에서 왼쪽으로 이동 -->
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            from="820 0"
+            to="-530 0"
+            dur="13s"
+            repeatCount="indefinite"/>
 
+          ${clover(20, 69)}
+
+          <text x="50" y="77"
+                font-family="Arial, sans-serif"
+                font-size="20"
+                font-weight="bold"
+                fill="#604329">
+            <tspan>다니엘</tspan>
+            <tspan fill="#F28F8F"> ♥ </tspan>
+            <tspan>미겔 · 함께한 지 D+${days}</tspan>
+          </text>
+
+          ${clover(470, 69)}
+        </g>
+      </g>
     </svg>
   `;
 
