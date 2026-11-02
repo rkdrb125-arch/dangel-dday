@@ -1,6 +1,50 @@
 
-export default function handler(req, res) {
-  // 한국 시간 기준 오늘 날짜
+import { createCanvas, GlobalFonts, loadImage } from "@napi-rs/canvas";
+import GIFEncoder from "gif-encoder-2";
+
+const WIDTH = 834;
+const HEIGHT = 110;
+
+let assetsPromise;
+
+async function getAssets() {
+  if (!assetsPromise) {
+    assetsPromise = (async () => {
+      // 일반 한글 글씨체
+      const fontUrl =
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Regular.ttf";
+
+      // 실제 세잎클로버 이모지 그림
+      const cloverUrl =
+        "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2618.png";
+
+      const [fontRes, cloverRes] = await Promise.all([
+        fetch(fontUrl),
+        fetch(cloverUrl)
+      ]);
+
+      if (!fontRes.ok || !cloverRes.ok) {
+        throw new Error("폰트 또는 클로버 다운로드 실패");
+      }
+
+      const font = Buffer.from(await fontRes.arrayBuffer());
+      const clover = Buffer.from(await cloverRes.arrayBuffer());
+
+      GlobalFonts.registerFromBuffer(font, "CafeKorean");
+
+      return {
+        cloverImage: await loadImage(clover)
+      };
+    })().catch(error => {
+      assetsPromise = null;
+      throw error;
+    });
+  }
+
+  return assetsPromise;
+}
+
+function todayKST() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -8,110 +52,143 @@ export default function handler(req, res) {
     day: "numeric"
   }).formatToParts(new Date());
 
-  const date = {};
+  const d = {};
 
   for (const part of parts) {
     if (part.type !== "literal") {
-      date[part.type] = Number(part.value);
+      d[part.type] = Number(part.value);
     }
   }
 
-  // 2020년 8월 25일을 D+1로 계산
-  const start = Date.UTC(2020, 7, 25);
+  return Date.UTC(d.year, d.month - 1, d.day);
+}
 
-  const today = Date.UTC(
-    date.year,
-    date.month - 1,
-    date.day
-  );
+function roundRect(ctx, x, y, w, h, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  ctx.fill();
+}
 
-  const days =
-    Math.floor((today - start) / 86400000) + 1;
+export default async function handler(req, res) {
+  try {
+    const { cloverImage } = await getAssets();
 
-  // 움직이는 디데이 전광판
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="834"
-         height="110"
-         viewBox="0 0 834 110">
+    const start = Date.UTC(2020, 7, 25);
+    const days = Math.floor(
+      (todayKST() - start) / 86400000
+    ) + 1;
 
-      <!-- 연두색 배경 -->
-      <rect width="834"
-            height="110"
-            rx="13"
-            fill="#D6E78A"/>
+    const canvas = createCanvas(WIDTH, HEIGHT);
+    const ctx = canvas.getContext("2d");
 
-      <!-- 상단 제목 -->
-      <text x="24"
-            y="29"
-            font-family="Arial, sans-serif"
-            font-size="13"
-            font-weight="bold"
-            fill="#604329">
-        ♥ DANGEL LAND · ANNIVERSARY
-      </text>
+    const encoder = new GIFEncoder(
+      WIDTH, HEIGHT, "octree"
+    );
 
-      <!-- 흰색 전광판 -->
-      <rect x="14"
-            y="43"
-            width="806"
-            height="54"
-            rx="9"
-            fill="#FFFFFF"/>
+    encoder.setRepeat(0);
+    encoder.setDelay(180);
+    encoder.start();
 
-      <!-- 움직이는 영역 -->
-      <defs>
-        <clipPath id="tickerClip">
-          <rect x="14"
-                y="43"
-                width="806"
-                height="54"
-                rx="9"/>
-        </clipPath>
-      </defs>
+    const left = "다니엘 ";
+    const right = ` 미겔 · 함께한 지 D+${days}`;
 
-      <!-- 오른쪽에서 왼쪽으로 이동 -->
-      <g clip-path="url(#tickerClip)">
-        <g>
-          <animateTransform
-            attributeName="transform"
-            type="translate"
-            from="850 0"
-            to="-650 0"
-            dur="15s"
-            repeatCount="indefinite"/>
+    ctx.font = 'bold 20px "CafeKorean"';
 
-          <text x="0"
-                y="77"
-                font-family="Arial, sans-serif"
-                font-size="20"
-                font-weight="bold"
-                fill="#604329">
+    const leftWidth = ctx.measureText(left).width;
+    const rightWidth = ctx.measureText(right).width;
 
-            <tspan>☘️ 다니엘 </tspan>
+    const heartWidth = 24;
+    const cloverSize = 25;
+    const gap = 12;
 
-            <tspan fill="#F28F8F">♥</tspan>
+    const textWidth =
+      cloverSize + gap +
+      leftWidth + heartWidth + rightWidth +
+      gap + cloverSize;
 
-            <tspan>
-              미겔 · 함께한 지 D+${days} ☘️
-            </tspan>
+    const frames = 36;
 
-          </text>
-        </g>
-      </g>
+    for (let i = 0; i < frames; i++) {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-    </svg>
-  `;
+      // 연두색 배경
+      roundRect(
+        ctx, 0, 0, WIDTH, HEIGHT, 13,
+        "#D6E78A"
+      );
 
-  res.setHeader(
-    "Content-Type",
-    "image/svg+xml; charset=utf-8"
-  );
+      // 상단 제목
+      ctx.fillStyle = "#604329";
+      ctx.font = 'bold 13px "CafeKorean"';
+      ctx.fillText(
+        "♥ DANGEL LAND · ANNIVERSARY",
+        24, 29
+      );
 
-  res.setHeader(
-    "Cache-Control",
-    "public, max-age=0, s-maxage=300"
-  );
+      // 흰색 전광판
+      roundRect(
+        ctx, 14, 43, 806, 54, 9,
+        "#FFFFFF"
+      );
 
-  res.status(200).send(svg);
+      // 움직이는 내용은 흰색 영역 안에서만 표시
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(14, 43, 806, 54);
+      ctx.clip();
+
+      const travel = WIDTH + textWidth + 40;
+      let x = WIDTH - (i / frames) * travel;
+
+      // 왼쪽 세잎클로버
+      ctx.drawImage(cloverImage, x, 57, 25, 25);
+      x += cloverSize + gap;
+
+      // 다니엘
+      ctx.font = 'bold 20px "CafeKorean"';
+      ctx.fillStyle = "#604329";
+      ctx.fillText(left, x, 77);
+      x += leftWidth;
+
+      // 코랄핑크 하트
+      ctx.fillStyle = "#F28F8F";
+      ctx.font = "bold 23px Arial";
+      ctx.fillText("♥", x, 78);
+      x += heartWidth;
+
+      // 미겔과 디데이
+      ctx.font = 'bold 20px "CafeKorean"';
+      ctx.fillStyle = "#604329";
+      ctx.fillText(right, x, 77);
+      x += rightWidth + gap;
+
+      // 오른쪽 세잎클로버
+      ctx.drawImage(cloverImage, x, 57, 25, 25);
+
+      ctx.restore();
+
+      encoder.addFrame(ctx);
+    }
+
+    encoder.finish();
+
+    res.setHeader("Content-Type", "image/gif");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=3600"
+    );
+
+    res.status(200).send(
+      Buffer.from(encoder.out.getData())
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("GIF generation failed");
+  }
 }
