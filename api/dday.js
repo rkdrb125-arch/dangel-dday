@@ -10,30 +10,47 @@ let assetsPromise;
 async function getAssets() {
   if (!assetsPromise) {
     assetsPromise = (async () => {
-      // 일반 한글 글씨체
+      // 일반 한글 글꼴: Noto Sans KR
       const fontUrl =
-        "https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Regular.ttf";
+        "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf";
 
-      // 실제 세잎클로버 이모지 그림
+      // 세잎클로버 이모지 이미지
       const cloverUrl =
         "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2618.png";
 
-      const [fontRes, cloverRes] = await Promise.all([
-        fetch(fontUrl),
-        fetch(cloverUrl)
-      ]);
+      const [fontResponse, cloverResponse] =
+        await Promise.all([
+          fetch(fontUrl),
+          fetch(cloverUrl)
+        ]);
 
-      if (!fontRes.ok || !cloverRes.ok) {
-        throw new Error("폰트 또는 클로버 다운로드 실패");
+      if (!fontResponse.ok) {
+        throw new Error("한글 폰트를 불러오지 못했습니다.");
       }
 
-      const font = Buffer.from(await fontRes.arrayBuffer());
-      const clover = Buffer.from(await cloverRes.arrayBuffer());
+      if (!cloverResponse.ok) {
+        throw new Error("클로버를 불러오지 못했습니다.");
+      }
 
-      GlobalFonts.registerFromBuffer(font, "CafeKorean");
+      const fontBuffer = Buffer.from(
+        await fontResponse.arrayBuffer()
+      );
+
+      const cloverBuffer = Buffer.from(
+        await cloverResponse.arrayBuffer()
+      );
+
+      const registered = GlobalFonts.registerFromBuffer(
+        fontBuffer,
+        "CafeFont"
+      );
+
+      if (!registered) {
+        throw new Error("한글 폰트 등록 실패");
+      }
 
       return {
-        cloverImage: await loadImage(clover)
+        cloverImage: await loadImage(cloverBuffer)
       };
     })().catch(error => {
       assetsPromise = null;
@@ -44,7 +61,7 @@ async function getAssets() {
   return assetsPromise;
 }
 
-function todayKST() {
+function getDays() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -52,37 +69,37 @@ function todayKST() {
     day: "numeric"
   }).formatToParts(new Date());
 
-  const d = {};
+  const date = {};
 
   for (const part of parts) {
     if (part.type !== "literal") {
-      d[part.type] = Number(part.value);
+      date[part.type] = Number(part.value);
     }
   }
 
-  return Date.UTC(d.year, d.month - 1, d.day);
+  const start = Date.UTC(2020, 7, 25);
+  const today = Date.UTC(
+    date.year,
+    date.month - 1,
+    date.day
+  );
+
+  return Math.floor(
+    (today - start) / 86400000
+  ) + 1;
 }
 
-function roundRect(ctx, x, y, w, h, r, color) {
+function rounded(ctx, x, y, w, h, r, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 }
 
 export default async function handler(req, res) {
   try {
     const { cloverImage } = await getAssets();
-
-    const start = Date.UTC(2020, 7, 25);
-    const days = Math.floor(
-      (todayKST() - start) / 86400000
-    ) + 1;
+    const days = getDays();
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -95,90 +112,90 @@ export default async function handler(req, res) {
     encoder.setDelay(180);
     encoder.start();
 
-    const left = "다니엘 ";
-    const right = ` 미겔 · 함께한 지 D+${days}`;
+    const leftText = "다니엘 ";
+    const rightText =
+      ` 미겔 · 함께한 지 D+${days}`;
 
-    ctx.font = 'bold 20px "CafeKorean"';
+    const font = 'bold 20px "CafeFont"';
 
-    const leftWidth = ctx.measureText(left).width;
-    const rightWidth = ctx.measureText(right).width;
+    ctx.font = font;
 
-    const heartWidth = 24;
-    const cloverSize = 25;
-    const gap = 12;
+    const leftWidth =
+      ctx.measureText(leftText).width;
 
-    const textWidth =
-      cloverSize + gap +
-      leftWidth + heartWidth + rightWidth +
-      gap + cloverSize;
+    const rightWidth =
+      ctx.measureText(rightText).width;
 
-    const frames = 36;
+    const contentWidth =
+      25 + 12 + leftWidth + 24 +
+      rightWidth + 12 + 25;
 
-    for (let i = 0; i < frames; i++) {
+    for (let i = 0; i < 36; i++) {
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-      // 연두색 배경
-      roundRect(
-        ctx, 0, 0, WIDTH, HEIGHT, 13,
-        "#D6E78A"
+      rounded(
+        ctx, 0, 0, WIDTH, HEIGHT,
+        13, "#D6E78A"
       );
 
-      // 상단 제목
       ctx.fillStyle = "#604329";
-      ctx.font = 'bold 13px "CafeKorean"';
+      ctx.font = 'bold 13px Arial';
       ctx.fillText(
         "♥ DANGEL LAND · ANNIVERSARY",
         24, 29
       );
 
-      // 흰색 전광판
-      roundRect(
-        ctx, 14, 43, 806, 54, 9,
-        "#FFFFFF"
+      rounded(
+        ctx, 14, 43, 806, 54,
+        9, "#FFFFFF"
       );
 
-      // 움직이는 내용은 흰색 영역 안에서만 표시
       ctx.save();
       ctx.beginPath();
       ctx.rect(14, 43, 806, 54);
       ctx.clip();
 
-      const travel = WIDTH + textWidth + 40;
-      let x = WIDTH - (i / frames) * travel;
+      const distance =
+        WIDTH + contentWidth + 40;
 
-      // 왼쪽 세잎클로버
-      ctx.drawImage(cloverImage, x, 57, 25, 25);
-      x += cloverSize + gap;
+      let x =
+        WIDTH - (i / 36) * distance;
 
-      // 다니엘
-      ctx.font = 'bold 20px "CafeKorean"';
+      ctx.drawImage(
+        cloverImage, x, 57, 25, 25
+      );
+      x += 37;
+
+      ctx.font = font;
       ctx.fillStyle = "#604329";
-      ctx.fillText(left, x, 77);
+      ctx.fillText(leftText, x, 77);
       x += leftWidth;
 
-      // 코랄핑크 하트
-      ctx.fillStyle = "#F28F8F";
       ctx.font = "bold 23px Arial";
+      ctx.fillStyle = "#F28F8F";
       ctx.fillText("♥", x, 78);
-      x += heartWidth;
+      x += 24;
 
-      // 미겔과 디데이
-      ctx.font = 'bold 20px "CafeKorean"';
+      ctx.font = font;
       ctx.fillStyle = "#604329";
-      ctx.fillText(right, x, 77);
-      x += rightWidth + gap;
+      ctx.fillText(rightText, x, 77);
+      x += rightWidth + 12;
 
-      // 오른쪽 세잎클로버
-      ctx.drawImage(cloverImage, x, 57, 25, 25);
+      ctx.drawImage(
+        cloverImage, x, 57, 25, 25
+      );
 
       ctx.restore();
-
       encoder.addFrame(ctx);
     }
 
     encoder.finish();
 
-    res.setHeader("Content-Type", "image/gif");
+    res.setHeader(
+      "Content-Type",
+      "image/gif"
+    );
+
     res.setHeader(
       "Cache-Control",
       "public, max-age=0, s-maxage=3600"
@@ -189,6 +206,8 @@ export default async function handler(req, res) {
     );
   } catch (error) {
     console.error(error);
-    res.status(500).send("GIF generation failed");
+    res.status(500).send(
+      "GIF generation failed: " + error.message
+    );
   }
 }
