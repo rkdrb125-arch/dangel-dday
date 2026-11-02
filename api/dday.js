@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     );
 
     encoder.setRepeat(0);
-    encoder.setDelay(40);
+    encoder.setDelay(80);
     encoder.start();
 
     const leftText = "다니엘 ";
